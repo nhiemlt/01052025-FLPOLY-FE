@@ -12,7 +12,7 @@ const UserProfile = lazy(() => import("../pages/user/account/UserProfile.jsx"));
 const userRoutes = [
   { path: "home", component: Home },
   { path: "products", component: ProductList },
-  { path: "product/:productId", component: ProductDetail },
+  { path: "product/:sanPhamId", component: ProductDetail },
   { path: "cart", component: Cart },
   { path: "checkout", component: Checkout },
   { path: "order-history", component: OrderHistory },
