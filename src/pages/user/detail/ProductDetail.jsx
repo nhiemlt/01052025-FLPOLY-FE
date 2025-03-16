@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import DetailService from "./services/DetailService";
+import Cookies from "js-cookie"; // Import js-cookie
+import { ToastContainer, toast } from "react-toastify"; // Import react-toastify
+import "react-toastify/dist/ReactToastify.css"; // Import toastify CSS
 
 function ProductDetail() {
   const { sanPhamId } = useParams();
@@ -15,6 +18,16 @@ function ProductDetail() {
     thuongHieuId: null,
     xuatXuId: null,
   });
+  const [cartAttributes, setCartAttributes] = useState({
+    chatLieu: null,
+    coAo: null,
+    kichThuoc: null,
+    mauSac: null,
+    tayAo: null,
+    thuongHieu: null,
+    xuatXu: null,
+  });
+  const [quantity, setQuantity] = useState(1); // State for quantity
 
   useEffect(() => {
     fetchAttributes();
@@ -31,6 +44,7 @@ function ProductDetail() {
       const response = await DetailService.getAttributesByProductId(sanPhamId);
       setAttributes(response.data);
       setSelectedAttributes({
+        detailId: response.data.id,
         chatLieuId: response.data.chatLieus[0]?.id || null,
         coAoId: response.data.coAos[0]?.id || null,
         kichThuocId: response.data.kichThuocs[0]?.id || null,
@@ -39,6 +53,16 @@ function ProductDetail() {
         thuongHieuId: response.data.thuongHieus[0]?.id || null,
         xuatXuId: response.data.xuatXus[0]?.id || null,
       });
+      setCartAttributes({
+        detailId: response.data.id,
+        chatLieu: response.data.chatLieus[0]?.tenChatLieu || null,
+        coAo: response.data.coAos[0]?.tenCoAo || null,
+        kichThuoc: response.data.kichThuocs[0]?.tenKichThuoc || null,
+        mauSac: response.data.mauSacs[0]?.tenMauSac || null,
+        tayAo: response.data.tayAos[0]?.tenTayAo || null,
+        thuongHieu: response.data.thuongHieus[0]?.tenThuongHieu || null,
+        xuatXu: response.data.xuatXus[0]?.tenXuatXu || null,
+      });       
     } catch (error) {
       console.error("Error fetching attributes:", error);
     }
@@ -57,17 +81,80 @@ function ProductDetail() {
         selectedAttributes.xuatXuId
       );
       setProductDetail(response.data);
+      console.log(response.data);
     } catch (error) {
       console.error("Error fetching product detail:", error);
     }
   };
 
-  const handleAttributeChange = (attribute, value) => {
+  const handleAttributeChange = (attribute, value, name) => {
     setSelectedAttributes((prev) => ({
       ...prev,
       [attribute]: value,
     }));
+  
+    setCartAttributes((prev) => ({
+      ...prev,
+      [attribute]: name,
+    }));
   };
+  
+
+  const handleQuantityChange = (type) => {
+    setQuantity((prev) => {
+      if (type === "increment") {
+        return Math.min(prev + 1, productDetail.soLuong);
+      }
+      return Math.max(1, prev - 1);
+    });
+  };  
+
+  const isSameProduct = (item1, item2) => {
+    if (!item1 || !item2 || !item1.selectedAttributes || !item2.selectedAttributes) {
+      return false;
+    }
+    
+    return (
+      item1.sanPhamId === item2.sanPhamId &&
+      Object.keys(item1.selectedAttributes).every(
+        (key) => item1.selectedAttributes[key] === item2.selectedAttributes[key]
+      )
+    );
+  };
+  
+  
+  const handleAddToCart = () => {
+    if (!productDetail.sanPham || productDetail.soLuong < 1) {
+      toast.error("Sản phẩm không khả dụng.");
+      return;
+    }
+  
+    const cart = Cookies.get("cart") ? JSON.parse(Cookies.get("cart")) : [];
+  
+    const newItem = {
+      sanPhamId,
+      detailId: productDetail.id,
+      productName: productDetail.sanPham.tenSanPham,
+      image: productDetail.hinhAnh,
+      price: productDetail.donGia,
+      quantity: Math.min(quantity, productDetail.soLuong),
+      cartAttributes: cartAttributes || {}, // Đảm bảo không bị undefined
+    };
+  
+    const existingItem = cart.find((item) => isSameProduct(item, newItem));
+  
+    if (existingItem) {
+      existingItem.quantity = Math.min(existingItem.quantity + quantity, productDetail.soLuong);
+    } else {
+      cart.push(newItem);
+    }
+  
+    Cookies.set("cart", JSON.stringify(cart), { expires: 7 });
+    toast.success("Sản phẩm đã được thêm vào giỏ hàng!");
+  };
+  
+  
+  
 
   if (!attributes || !productDetail) {
     return <div className="text-center text-gray-500">Không có sản phẩm nào phù hợp.</div>;
@@ -76,6 +163,9 @@ function ProductDetail() {
   return (
     <div className="bg-gradient-to-b from-orange-50 to-white min-h-screen">
       <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* Toast container */}
+        <ToastContainer />
+
         {/* Breadcrumb navigation */}
         <div className="mb-6 text-sm text-gray-600">
           <span className="hover:text-orange-500 cursor-pointer">Trang chủ</span> / 
@@ -86,7 +176,7 @@ function ProductDetail() {
         {/* Main product section */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-0">
-            {/* Product image gallery - 3 columns on large screens */}
+            {/* Product image gallery */}
             <div className="lg:col-span-3 p-6">
               <div className="relative overflow-hidden rounded-xl mb-4 bg-gray-50">
                 <img
@@ -100,7 +190,7 @@ function ProductDetail() {
               </div>
             </div>
             
-            {/* Product details - 2 columns */}
+            {/* Product details */}
             <div className="lg:col-span-2 p-6 border-l border-gray-100">
               <h1 className="text-3xl font-bold text-gray-800 mb-2">{productDetail.sanPham?.tenSanPham}</h1>
               
@@ -119,7 +209,7 @@ function ProductDetail() {
                       {attributes.mauSacs?.map((item) => (
                         <button
                           key={item.id}
-                          onClick={() => handleAttributeChange("mauSacId", item.id)}
+                          onClick={() => handleAttributeChange("mauSacId", item.id, item.tenMauSac)}
                           className={`px-4 py-2 rounded-lg border-2 transition-all ${
                             selectedAttributes.mauSacId === item.id 
                               ? "border-orange-500 bg-orange-50 text-orange-700 font-medium" 
@@ -138,7 +228,7 @@ function ProductDetail() {
                       {attributes.kichThuocs?.map((item) => (
                         <button
                           key={item.id}
-                          onClick={() => handleAttributeChange("kichThuocId", item.id)}
+                          onClick={() => handleAttributeChange("kichThuocId", item.id, item.tenKichThuoc)}
                           className={`w-12 h-12 flex items-center justify-center rounded-lg border-2 transition-all ${
                             selectedAttributes.kichThuocId === item.id 
                               ? "border-orange-500 bg-orange-50 text-orange-700 font-medium" 
@@ -158,7 +248,7 @@ function ProductDetail() {
                         {attributes.chatLieus?.map((item) => (
                           <button
                             key={item.id}
-                            onClick={() => handleAttributeChange("chatLieuId", item.id)}
+                            onClick={() => handleAttributeChange("chatLieuId", item.id, item.tenChatLieu)}
                             className={`px-4 py-2 rounded-lg border-2 transition-all ${
                               selectedAttributes.chatLieuId === item.id 
                                 ? "border-orange-500 bg-orange-50 text-orange-700 font-medium" 
@@ -177,7 +267,7 @@ function ProductDetail() {
                         {attributes.coAos?.map((item) => (
                           <button
                             key={item.id}
-                            onClick={() => handleAttributeChange("coAoId", item.id)}
+                            onClick={() => handleAttributeChange("coAoId", item.id, item.tenCoAo)}
                             className={`px-4 py-2 rounded-lg border-2 transition-all ${
                               selectedAttributes.coAoId === item.id 
                                 ? "border-orange-500 bg-orange-50 text-orange-700 font-medium" 
@@ -196,7 +286,7 @@ function ProductDetail() {
                         {attributes.tayAos?.map((item) => (
                           <button
                             key={item.id}
-                            onClick={() => handleAttributeChange("tayAoId", item.id)}
+                            onClick={() => handleAttributeChange("tayAoId", item.id, item.tenTayAo)}
                             className={`px-4 py-2 rounded-lg border-2 transition-all ${
                               selectedAttributes.tayAoId === item.id 
                                 ? "border-orange-500 bg-orange-50 text-orange-700 font-medium" 
@@ -215,7 +305,7 @@ function ProductDetail() {
                         {attributes.thuongHieus?.map((item) => (
                           <button
                             key={item.id}
-                            onClick={() => handleAttributeChange("thuongHieuId", item.id)}
+                            onClick={() => handleAttributeChange("thuongHieuId", item.id, item.tenThuongHieu)}
                             className={`px-4 py-2 rounded-lg border-2 transition-all ${
                               selectedAttributes.thuongHieuId === item.id 
                                 ? "border-orange-500 bg-orange-50 text-orange-700 font-medium" 
@@ -227,27 +317,59 @@ function ProductDetail() {
                         ))}
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Xuất xứ</label>
+                      <div className="flex flex-wrap gap-2">
+                        {attributes.xuatXus?.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => handleAttributeChange("xuatXuId", item.id, item.tenXuatXu)}
+                            className={`px-4 py-2 rounded-lg border-2 transition-all ${
+                              selectedAttributes.xuatXuId === item.id 
+                                ? "border-orange-500 bg-orange-50 text-orange-700 font-medium" 
+                                : "border-gray-200 hover:border-orange-300"
+                            }`}
+                          >
+                            {item.tenXuatXu}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
+                  
                 </div>
                 
                 {/* Add to cart section */}
                 <div className="pt-4 border-t border-gray-100">
                   <div className="flex items-center mb-4">
                     <div className="flex items-center border border-gray-300 rounded-lg">
-                      <button className="px-4 py-2 text-orange-500 hover:bg-gray-100">−</button>
+                      <button
+                        onClick={() => handleQuantityChange("decrement")}
+                        className="px-4 py-2 text-orange-500 hover:bg-gray-100"
+                      >
+                        −
+                      </button>
                       <input
                         type="text"
-                        value="1"
+                        value={quantity}
                         className="w-12 text-center border-0 focus:outline-none"
                         readOnly
                       />
-                      <button className="px-4 py-2 text-orange-500 hover:bg-gray-100">+</button>
+                      <button
+                        onClick={() => handleQuantityChange("increment")}
+                        className="px-4 py-2 text-orange-500 hover:bg-gray-100"
+                      >
+                        +
+                      </button>
                     </div>
                     <span className="ml-4 text-gray-500">Còn lại: {productDetail.soLuong} sản phẩm</span>
                   </div>
                   
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-6 rounded-lg transition-colors shadow-md">
+                    <button
+                      onClick={handleAddToCart}
+                      className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-6 rounded-lg transition-colors shadow-md"
+                    >
                       Thêm vào giỏ hàng
                     </button>
                     <button className="flex-1 bg-orange-100 hover:bg-orange-200 text-orange-700 font-medium py-3 px-6 rounded-lg transition-colors">
